@@ -1,4 +1,7 @@
 import UtilityPackage.Utility
+import org.apache.spark.ml.feature.StopWordsRemover
+import org.apache.spark.sql.functions.{col, udf}
+import org.apache.spark.sql.types.IntegerType
 
 import scala.collection.mutable
 object TweetsStreaming extends App {

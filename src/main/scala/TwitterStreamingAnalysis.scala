@@ -1,4 +1,7 @@
 import UtilityPackage.Utility
+import org.apache.spark.sql.functions.{col, udf}
+import org.apache.spark.sql.streaming.Trigger
+import org.apache.spark.sql.types.StringType
 
 import scala.collection.mutable
 object TwitterStreamingAnalysis {
