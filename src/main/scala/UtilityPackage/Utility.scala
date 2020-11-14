@@ -51,11 +51,11 @@ object Utility {
       val command = "python3" + " " + filepath
       // creating rdd with the input files,repartitioning the rdd and passing the command using pipe
 
-      val predictedPriceRDD =
+      val polarityScoreOfReviewsRDD =
         inputDataFrame.rdd
           .repartition(1)
           .pipe(command)
-      predictedPriceRDD
+      polarityScoreOfReviewsRDD
     } catch {
       case ex: Exception =>
         ex.printStackTrace()
