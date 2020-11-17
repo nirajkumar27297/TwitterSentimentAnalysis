@@ -1,16 +1,22 @@
+import java.io.Serializable
 import java.text.Normalizer
 
 import UtilityPackage.Utility
-import com.bridgelabz.PythonHandler.PythonHandler
-import com.bridgelabz.TwitterSentimentAnalysis.TwitterStreamingAnalysis
+import UtilityPackage.Utility.createKafkaProducer
+import com.bridgelabz.PythonHandlerPackage.PythonHandler
+import com.bridgelabz.TwitterSentimentAnalysisPackage.TwitterStreamingAnalysis
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.spark.ml.feature.StopWordsRemover
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions.{col, udf}
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.mockito.Mockito.{verify, when}
 import org.scalatest.FunSuite
+import org.scalatestplus.mockito.MockitoSugar.mock
 
 import scala.collection.mutable
-class TwitterSentimentAnalysisTest extends FunSuite {
+
+class TwitterSentimentAnalysisTest extends FunSuite with Serializable {
   val sparkSessionObj: SparkSession =
     Utility.createSessionObject("Twitter Sentimental Analysis Test")
   import sparkSessionObj.implicits._
@@ -18,14 +24,19 @@ class TwitterSentimentAnalysisTest extends FunSuite {
 
   val twitterStreamingAnalysisObj =
     new TwitterStreamingAnalysis(sparkSessionObj, pythonHandlerObj)
-  val tweets = List(
+  val tweet =
     "Check out my Gig on Fiverr: stencil art https://t.co/9dYg70kWNj\n\n#RepublicansForBiden #Capricorn #Philadelphia\u2026 https://t.co/IsBhlMViBK"
-  )
+  val tweets = List(tweet)
   val frameComparisonObj = new FrameComparison()
   val inputDataFrame: DataFrame = tweets.toDF("value")
   val wrongColumnDataFrame: DataFrame = tweets.toDF("values")
   val filePath = "./PythonFiles/SentimentAnalysis.py"
   val wrongPythonFilePath = "./PythonFiles/SentmentAnalysis.py"
+  val cleanedTweetsDataFrame =
+    twitterStreamingAnalysisObj.preProcessingTweets(inputDataFrame)
+
+  val brokers = "localhost:9092"
+  val topics = "TwitterTest"
   def extractingTextPart(review: String): String = {
 
     val reviews = Normalizer.normalize(review, Normalizer.Form.NFD)
@@ -123,7 +134,6 @@ class TwitterSentimentAnalysisTest extends FunSuite {
   test(
     "test_performingSentimentalAnalysis_ProvidingPositiveTweet_ReturnDataFrameWithPositivePolarity"
   ) {
-    val cleanedTweetsDataFrame = preProcessingTweets(inputDataFrame)
     val polarityScoreOfReviewsRDD =
       Utility.runPythonCommand(
         filePath,
@@ -186,5 +196,81 @@ class TwitterSentimentAnalysisTest extends FunSuite {
         )
     }
     assert(thrown.getMessage == "Spark Sql Analysis Exception")
+  }
+  test(
+    "test_getSentimentScoreFunction_Checking_Whether_performingSentimentAnalysisFunctionisCalledOrNot_ReturnsTrue"
+  ) {
+    val pythonHandlerService = mock[PythonHandler]
+    val returnedDataFrame =
+      pythonHandlerObj.performingSentimentAnalysis(
+        cleanedTweetsDataFrame,
+        filePath
+      )
+    when(
+      pythonHandlerService
+        .performingSentimentAnalysis(cleanedTweetsDataFrame, filePath)
+    ).thenReturn(returnedDataFrame)
+    val twitterStreamingAnalysisMockObj =
+      new TwitterStreamingAnalysis(sparkSessionObj, pythonHandlerService)
+
+    twitterStreamingAnalysisMockObj.getSentimentScore(
+      cleanedTweetsDataFrame,
+      filePath
+    )
+
+    verify(pythonHandlerService)
+      .performingSentimentAnalysis(cleanedTweetsDataFrame, filePath)
+  }
+
+  test(
+    "test_TakingInputFromKafka_DirectlyTakingInputFromKafkaProducer_UsingTakingInputFunction_ReturnsTrueForFrameComparison"
+  ) {
+    val kafkaProducer = createKafkaProducer(brokers)
+    val preProcessedInputTestDF = preProcessingTweets(inputDataFrame)
+    def checkDataFrames(batchDF: DataFrame): Unit = {
+      val preProcessedInputDF =
+        twitterStreamingAnalysisObj.preProcessingTweets(batchDF)
+      preProcessedInputDF.show(1)
+      assert(
+        frameComparisonObj
+          .frameComparison(preProcessedInputTestDF, preProcessedInputDF)
+      )
+    }
+
+    val record =
+      new ProducerRecord[String, String](
+        topics,
+        "",
+        tweet
+      )
+    kafkaProducer.send(record)
+    val functionDataFrame =
+      twitterStreamingAnalysisObj.takingInputFromKafka(brokers, topics)
+
+    functionDataFrame.writeStream
+      .format("console")
+      .foreachBatch((batchDF: DataFrame, _: Long) => checkDataFrames(batchDF))
+      .start()
+      .awaitTermination(20000)
+  }
+  test(
+    "test_TakingInputFromKafka_DirectlyTakingInputFromKafkaProducer_UsingTakingInputFunction_ReturnsException"
+  ) {
+    val kafkaProducer = createKafkaProducer(brokers)
+    val record =
+      new ProducerRecord[String, String](
+        topics,
+        "",
+        tweet
+      )
+    kafkaProducer.send(record)
+    val thrown = intercept[Exception] {
+      val functionDataFrame =
+        twitterStreamingAnalysisObj.takingInputFromKafka("hjk", topics)
+      functionDataFrame.show(1)
+    }
+    assert(
+      thrown.getLocalizedMessage == "Failed to construct kafka consumer"
+    )
   }
 }
