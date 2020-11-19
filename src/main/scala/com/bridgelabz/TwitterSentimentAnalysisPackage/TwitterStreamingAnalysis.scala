@@ -4,9 +4,14 @@ import UtilityPackage.Utility
 import com.bridgelabz.PythonHandlerPackage.PythonHandler
 import org.apache.log4j.Logger
 import org.apache.spark.ml.feature.StopWordsRemover
-import org.apache.spark.sql.functions.{col, udf}
+import org.apache.spark.sql.functions.{
+  col,
+  current_timestamp,
+  to_timestamp,
+  udf
+}
 import org.apache.spark.sql.streaming.Trigger
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{StringType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.collection.mutable
@@ -80,6 +85,12 @@ class TwitterStreamingAnalysis(
         logger.info("Difficulty in taking input from kafka brokers" + ex)
         throw new Exception("Difficulty in taking input from kafka brokers")
       }
+      case ex: org.apache.kafka.common.config.ConfigException => {
+        logger.info(
+          "Difficulty in starting the Streaming Services and Exception is" + ex
+        )
+        throw new Exception("Spark Sql Analysis Exception")
+      }
 
       case ex: org.apache.spark.sql.AnalysisException => {
         ex.printStackTrace()
@@ -106,7 +117,8 @@ class TwitterStreamingAnalysis(
     try {
       logger.info("Cleansing operation on Tweets")
       val tokenizedTweetDataFrame = inputDataFrame
-        .select("value")
+        .select("value", "key")
+        .withColumn("Time", col("key").cast(StringType))
         .withColumn("Tweets", col("value").cast(StringType))
         .withColumn(
           "TweetsCleaned",
@@ -160,7 +172,8 @@ class TwitterStreamingAnalysis(
           "CleanedTweets",
           combineWordsUDF(col("StopWordsRemovedTweets"))
         )
-        .select("CleanedTweets", "Tweets")
+        .withColumn("Time", current_timestamp())
+        .select("CleanedTweets", "Tweets", "Time")
     cleanedTweetsDataFrame
   }
 
@@ -171,12 +184,20 @@ class TwitterStreamingAnalysis(
     */
   def getSentimentScore(inputDataFrame: DataFrame, filepath: String): Unit = {
     logger.info("Performing Sentimental Analysis on Tweets")
-    val polarityScoreOfReviewsDataFrame =
-      pythonHandlerObj.performingSentimentAnalysis(
-        inputDataFrame,
-        filepath
-      )
-    polarityScoreOfReviewsDataFrame.show(5)
+
+    if (!inputDataFrame.isEmpty) {
+      val polarityScoreOfReviewsDataFrame =
+        pythonHandlerObj.performingSentimentAnalysis(
+          inputDataFrame,
+          filepath
+        )
+
+      polarityScoreOfReviewsDataFrame.show(5)
+      polarityScoreOfReviewsDataFrame.write
+        .mode("append")
+        .option("header", value = true)
+        .csv("./SavedOutput/")
+    }
   }
 
   /**
@@ -197,7 +218,7 @@ class TwitterStreamingAnalysis(
         .trigger(Trigger.ProcessingTime("5 seconds"))
         .start()
       logger.info("Terminating the streaming services")
-      query.awaitTermination(300000)
+      query.awaitTermination()
     } catch {
       case ex: org.apache.spark.sql.AnalysisException => {
         logger.info(
