@@ -23,9 +23,9 @@ object Utility {
 
     val sparkConfigurations = new SparkConf()
       .setAppName(appName)
-      .setMaster("local")
-      .set("spark.streaming.kafka.maxRatePerPartition", "1")
+      .setMaster("local[*]")
       .set("spark.streaming.stopGracefullyOnShutdown", "true")
+      .set("spark.sql.legacy.timeParserPolicy", "LEGACY")
 
     val sparkSessionObj = SparkSession
       .builder()
