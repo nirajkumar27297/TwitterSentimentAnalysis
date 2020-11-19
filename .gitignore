@@ -5,3 +5,6 @@
 target
 .g8
 .bsp
+tmp
+SavedOutput
+chk-point-dir
