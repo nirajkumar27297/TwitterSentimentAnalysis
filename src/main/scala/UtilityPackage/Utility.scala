@@ -23,9 +23,9 @@ object Utility {
 
     val sparkConfigurations = new SparkConf()
       .setAppName(appName)
-      .setMaster("local")
-      .set("spark.streaming.kafka.maxRatePerPartition", "1")
+      .setMaster("local[*]")
       .set("spark.streaming.stopGracefullyOnShutdown", "true")
+      .set("spark.sql.legacy.timeParserPolicy", "LEGACY")
 
     val sparkSessionObj = SparkSession
       .builder()
@@ -51,11 +51,11 @@ object Utility {
       val command = "python3" + " " + filepath
       // creating rdd with the input files,repartitioning the rdd and passing the command using pipe
 
-      val predictedPriceRDD =
+      val polarityScoreOfReviewsRDD =
         inputDataFrame.rdd
           .repartition(1)
           .pipe(command)
-      predictedPriceRDD
+      polarityScoreOfReviewsRDD
     } catch {
       case ex: Exception =>
         ex.printStackTrace()
