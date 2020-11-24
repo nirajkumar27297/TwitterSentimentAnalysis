@@ -1,3 +1,19 @@
+/**
+  * The objective is to get the data from ka cluster ,push it through spark streaming in batches and predict
+  * the sentiment score  price for tweets and save it as a csv file.
+  * Library Used -
+  * 1> org.apache.spark.spark-sql
+  *  Version - 3.0.0
+  * 2> org.apache.spark.spark-core
+  *   Version - 3.0.0
+  * 3> org.apache.spark.spark-Streaming
+  *  Version - 3.0.0
+  * 4> org.apache.spark.spark-mllib
+  *    Version - 3.0.0
+  *
+  *    @author:Niraj
+  *    *
+  */
 package com.bridgelabz.TwitterSentimentAnalysisPackage
 
 import UtilityPackage.Utility
@@ -187,8 +203,9 @@ class TwitterStreamingAnalysis(
 
   /**
     * The function is to perform sentimental analysis on tweets using PythonHandler class Functions.
-    * @param inputDataFrame [DataFrame]
-    * @param filepath [String]
+    * @param inputDataFrame
+    * @param filepath
+    * @param pathToSave
     */
   def getSentimentScore(
       inputDataFrame: DataFrame,
@@ -224,9 +241,9 @@ class TwitterStreamingAnalysis(
 
   /**
     * The function is for starting and stopping the streaming services along with calling
-    * the function for each dataframe batch.
-    * @param inputDataFrame DataFrame
-    * @param filepath filepath
+    * @param inputDataFrame
+    * @param filepath
+    * @param pathToSave
     */
   def writeToOutputStream(
       inputDataFrame: DataFrame,

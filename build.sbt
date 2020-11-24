@@ -20,6 +20,14 @@ Library Used
 --This is used for unit testing.
 10> org.mockito.mockito-all Version 1.8.4
 -- This is used for mocking the services.
+11> org.apache.hadoop.hadoop-common Version 3.2.1
+12> org.apache.hadoop.hadoop-aws Version 3.2.1
+-- The above jars are included for pushing file to S3 and configuring AWS.
+13> jp.co.bizreach.aws-s3-scala Version 0.0.15
+-- This is used to get cli for using performs various s3 operations in scala.
+14> org.plotly-scala.plotly-render Version 0.8.0
+-- This is used for visualization.
+
  */
 
 name := "TwitterSentimentAnalysis"

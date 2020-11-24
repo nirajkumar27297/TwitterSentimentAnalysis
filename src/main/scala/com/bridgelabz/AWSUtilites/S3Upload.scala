@@ -1,9 +1,15 @@
+/**
+  * @author Niraj Kumar
+  */
 package com.bridgelabz.AWSUtilites
-
 import awscala.Region
 import awscala.s3.{Bucket, S3}
 
+/**
+  * The class contains the function to upload it to S3 with specified bucket name
+  */
 object S3Upload {
+  //Selecting the nearby location
   implicit val s3: S3 = S3.at(Region.Mumbai)
 
   /***
