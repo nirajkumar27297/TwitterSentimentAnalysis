@@ -1,17 +1,13 @@
 package com.bridgelabz.TwitterSentimentAnalysisPackage
 
 import UtilityPackage.Utility
+import com.bridgelabz.AWSUtilites.{S3Configurations, S3Upload}
 import com.bridgelabz.PythonHandlerPackage.PythonHandler
 import org.apache.log4j.Logger
 import org.apache.spark.ml.feature.StopWordsRemover
-import org.apache.spark.sql.functions.{
-  col,
-  current_timestamp,
-  to_timestamp,
-  udf
-}
+import org.apache.spark.sql.functions.{col, current_timestamp, udf}
 import org.apache.spark.sql.streaming.Trigger
-import org.apache.spark.sql.types.{StringType}
+import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.collection.mutable
@@ -19,22 +15,22 @@ import scala.collection.mutable
 /**
   *
   */
-object TwitterStreamingAnalysis {
-  def main(args: Array[String]): Unit = {
-    val sparkSessionObj =
-      Utility.createSessionObject("Twitter Sentimental Analysis")
-    val pythonHandlerObj = new PythonHandler(sparkSessionObj)
-    val tweetsStreamingObj =
-      new TwitterStreamingAnalysis(sparkSessionObj, pythonHandlerObj)
-    val tweetsDataFrame =
-      tweetsStreamingObj.takingInputFromKafka(args(0), args(1))
-    val cleanedTweetsDataFrame =
-      tweetsStreamingObj.preProcessingTweets(tweetsDataFrame)
-    tweetsStreamingObj.writeToOutputStream(
-      cleanedTweetsDataFrame,
-      args(2)
-    )
-  }
+object TwitterStreamingAnalysis extends App {
+  val sparkSessionObj =
+    Utility.createSessionObject("Twitter Sentimental Analysis")
+  S3Configurations.connectToS3(sparkSessionObj.sparkContext)
+  val pythonHandlerObj = new PythonHandler(sparkSessionObj)
+  val tweetsStreamingObj =
+    new TwitterStreamingAnalysis(sparkSessionObj, pythonHandlerObj)
+  val tweetsDataFrame =
+    tweetsStreamingObj.takingInputFromKafka(args(0), args(1))
+  val cleanedTweetsDataFrame =
+    tweetsStreamingObj.preProcessingTweets(tweetsDataFrame)
+  tweetsStreamingObj.writeToOutputStream(
+    cleanedTweetsDataFrame,
+    args(2),
+    args(3)
+  )
 }
 
 /**
@@ -159,22 +155,34 @@ class TwitterStreamingAnalysis(
     * @return [DataFrame]
     */
   private def removeStopWords(inputDataFrame: DataFrame): DataFrame = {
-    logger.info("Removing Stop Words From Tweets")
-    val remover = new StopWordsRemover()
-      .setInputCol("TweetsTokenized")
-      .setOutputCol("StopWordsRemovedTweets")
+    try {
+      logger.info("Removing Stop Words From Tweets")
+      val remover = new StopWordsRemover()
+        .setInputCol("TweetsTokenized")
+        .setOutputCol("StopWordsRemovedTweets")
 
-    val stopWordsRemoved = remover.transform(inputDataFrame)
+      val stopWordsRemoved = remover.transform(inputDataFrame)
 
-    val cleanedTweetsDataFrame =
-      stopWordsRemoved
-        .withColumn(
-          "CleanedTweets",
-          combineWordsUDF(col("StopWordsRemovedTweets"))
-        )
-        .withColumn("Time", current_timestamp())
-        .select("CleanedTweets", "Tweets", "Time")
-    cleanedTweetsDataFrame
+      val cleanedTweetsDataFrame =
+        stopWordsRemoved
+          .withColumn(
+            "CleanedTweets",
+            combineWordsUDF(col("StopWordsRemovedTweets"))
+          )
+          .withColumn("Time", current_timestamp())
+          .select("CleanedTweets", "Tweets", "Time")
+      cleanedTweetsDataFrame
+    } catch {
+      case ex: org.apache.spark.sql.AnalysisException => {
+        logger.info("Difficulty in cleansing operation Exception is" + ex)
+        throw new Exception("Spark Sql Analysis Exception")
+      }
+      case ex: Exception => {
+        ex.printStackTrace()
+        logger.info("Difficulty in cleansing operation Exception is" + ex)
+        throw new Exception("Unexpected Error Occurred")
+      }
+    }
   }
 
   /**
@@ -182,7 +190,11 @@ class TwitterStreamingAnalysis(
     * @param inputDataFrame [DataFrame]
     * @param filepath [String]
     */
-  def getSentimentScore(inputDataFrame: DataFrame, filepath: String): Unit = {
+  def getSentimentScore(
+      inputDataFrame: DataFrame,
+      filepath: String,
+      pathToSave: String
+  ): Unit = {
     logger.info("Performing Sentimental Analysis on Tweets")
 
     if (!inputDataFrame.isEmpty) {
@@ -191,12 +203,22 @@ class TwitterStreamingAnalysis(
           inputDataFrame,
           filepath
         )
+      //Saving the output dataframe as csv in the provided path
+      if (pathToSave.startsWith("s3a://")) {
+        val startPosition = pathToSave.indexOf("//") + 2
+        val lastPosition = pathToSave.lastIndexOf("/")
+        val bucketName = pathToSave.substring(startPosition, lastPosition)
+        println(bucketName)
+        if (!S3Upload.checkBucketExistsOrNot(bucketName)) {
+          S3Upload.createBucket(bucketName)
+        }
+      }
 
       polarityScoreOfReviewsDataFrame.show(5)
       polarityScoreOfReviewsDataFrame.write
         .mode("append")
         .option("header", value = true)
-        .csv("./SavedOutput/")
+        .csv(pathToSave)
     }
   }
 
@@ -206,15 +228,19 @@ class TwitterStreamingAnalysis(
     * @param inputDataFrame DataFrame
     * @param filepath filepath
     */
-  def writeToOutputStream(inputDataFrame: DataFrame, filepath: String): Unit = {
+  def writeToOutputStream(
+      inputDataFrame: DataFrame,
+      filepath: String,
+      pathToSave: String
+  ): Unit = {
     try {
       logger.info("Starting the streaming services")
       val query = inputDataFrame.writeStream
         .foreachBatch { (batchDataFrame: DataFrame, _: Long) =>
-          getSentimentScore(batchDataFrame, filepath)
+          getSentimentScore(batchDataFrame, filepath, pathToSave)
         }
         .queryName("Real Time Stock Prediction Query")
-        .option("checkpointLocation", "chk-point-dir")
+        .option("checkpointLocation", "chk-point-dir-twitter")
         .trigger(Trigger.ProcessingTime("5 seconds"))
         .start()
       logger.info("Terminating the streaming services")

@@ -3,9 +3,13 @@ package com.bridgelabz.TwitterSentimentAnalysisPackage
 import plotly._
 import Plotly._
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.functions.{window, col}
+import org.apache.spark.sql.functions.{window}
 
 object PlottingGraphs extends App {
+
+  /**
+    *
+    */
   val spark = SparkSession
     .builder()
     .master("local[*]")
