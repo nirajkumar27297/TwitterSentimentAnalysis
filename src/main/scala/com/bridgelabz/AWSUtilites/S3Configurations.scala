@@ -1,7 +1,13 @@
+/**
+  * @author Niraj Kumar
+  */
 package com.bridgelabz.AWSUtilites
 
 import org.apache.spark.SparkContext
 
+/**
+  * The objective of the class is to configure AWS credentials needed for uploading files to S3.
+  */
 object S3Configurations {
 
   /***
