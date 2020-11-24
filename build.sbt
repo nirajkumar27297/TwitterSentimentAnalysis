@@ -46,5 +46,8 @@ libraryDependencies += "org.mockito" % "mockito-all" % "1.8.4"
 
 // https://mvnrepository.com/artifact/org.plotly-scala/plotly-render
 libraryDependencies += "org.plotly-scala" %% "plotly-render" % "0.8.0"
+libraryDependencies += "jp.co.bizreach" %% "aws-s3-scala" % "0.0.15"
+
+libraryDependencies += "org.apache.hadoop" % "hadoop-common" % "3.2.1"
+libraryDependencies += "org.apache.hadoop" % "hadoop-aws" % "3.2.1"
 scapegoatVersion in ThisBuild := "1.3.8"
-coverageEnabled := true
