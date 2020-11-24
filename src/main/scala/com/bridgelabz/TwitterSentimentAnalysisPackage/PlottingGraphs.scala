@@ -1,3 +1,7 @@
+/**
+  * @author Niraj Kumar
+  */
+
 package com.bridgelabz.TwitterSentimentAnalysisPackage
 
 import plotly._
@@ -5,11 +9,11 @@ import Plotly._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{window}
 
+/**
+  * The objective of the class is to perform visualize the number of positive and negative tweets received.
+  */
 object PlottingGraphs extends App {
 
-  /**
-    *
-    */
   val spark = SparkSession
     .builder()
     .master("local[*]")
@@ -40,12 +44,12 @@ object PlottingGraphs extends App {
     )
 
   def plotData(batchDF: DataFrame): Unit = {
-    val (x, y) =
+    val (typeOfStatements, count) =
       batchDF.collect
         .map(r => (r(0).toString, r(2).toString.toInt))
         .toSeq
         .unzip
-    Bar(x, y).plot()
+    Bar(typeOfStatements, count).plot()
 
   }
 
